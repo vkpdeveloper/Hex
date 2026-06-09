@@ -47,6 +47,8 @@ public struct HexSettings: Codable, Equatable, Sendable {
 	public var wordRemovalsEnabled: Bool
 	public var wordRemovals: [WordRemoval]
 	public var wordRemappings: [WordRemapping]
+	public var tuningEnabled: Bool
+	public var tuningGroqAPIKey: String
 
 	private mutating func normalizeDoubleTapSettings() {
 		if !doubleTapLockEnabled {
@@ -78,7 +80,9 @@ public struct HexSettings: Codable, Equatable, Sendable {
 		hasCompletedStorageMigration: Bool = false,
 		wordRemovalsEnabled: Bool = false,
 		wordRemovals: [WordRemoval] = HexSettings.defaultWordRemovals,
-		wordRemappings: [WordRemapping] = []
+		wordRemappings: [WordRemapping] = [],
+		tuningEnabled: Bool = false,
+		tuningGroqAPIKey: String = ""
 	) {
 		self.soundEffectsEnabled = soundEffectsEnabled
 		self.soundEffectsVolume = soundEffectsVolume
@@ -104,6 +108,8 @@ public struct HexSettings: Codable, Equatable, Sendable {
 		self.wordRemovalsEnabled = wordRemovalsEnabled
 		self.wordRemovals = wordRemovals
 		self.wordRemappings = wordRemappings
+		self.tuningEnabled = tuningEnabled
+		self.tuningGroqAPIKey = tuningGroqAPIKey
 		normalizeDoubleTapSettings()
 	}
 
@@ -152,6 +158,8 @@ private enum HexSettingKey: String, CodingKey, CaseIterable {
 	case wordRemovalsEnabled
 	case wordRemovals
 	case wordRemappings
+	case tuningEnabled
+	case tuningGroqAPIKey
 }
 
 private struct SettingsField<Value: Codable & Sendable> {
@@ -284,6 +292,8 @@ private enum HexSettingsSchema {
 			.wordRemappings,
 			keyPath: \.wordRemappings,
 			default: defaults.wordRemappings
-		).eraseToAny()
+		).eraseToAny(),
+		SettingsField(.tuningEnabled, keyPath: \.tuningEnabled, default: defaults.tuningEnabled).eraseToAny(),
+		SettingsField(.tuningGroqAPIKey, keyPath: \.tuningGroqAPIKey, default: defaults.tuningGroqAPIKey).eraseToAny()
 	]
 }

@@ -52,6 +52,7 @@ struct TranscriptionFeature {
     // Transcription result flow
     case transcriptionResult(String, URL, TimeInterval)
     case transcriptionError(Error, URL?)
+    case finalizeCompleted
 
     // Model availability
     case modelMissing
@@ -65,6 +66,7 @@ struct TranscriptionFeature {
   }
 
   @Dependency(\.transcription) var transcription
+  @Dependency(\.tuning) var tuning
   @Dependency(\.recording) var recording
   @Dependency(\.pasteboard) var pasteboard
   @Dependency(\.keyEventMonitor) var keyEventMonitor
@@ -122,6 +124,11 @@ struct TranscriptionFeature {
 
       case let .transcriptionError(error, audioURL):
         return handleTranscriptionError(&state, error: error, audioURL: audioURL)
+
+      case .finalizeCompleted:
+        // Tuning may have kept the transcribing indicator visible; clear it now.
+        state.isTranscribing = false
+        return .none
 
       case .modelMissing:
         return .none
@@ -466,16 +473,40 @@ private extension TranscriptionFeature {
     let sourceAppName = state.sourceAppName
     let transcriptionHistory = state.$transcriptionHistory
 
-    return .run { send in
+    // Optional Groq-powered tuning of the final transcript.
+    let tuningAPIKey = state.hexSettings.tuningGroqAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    let shouldTune = state.hexSettings.tuningEnabled && !tuningAPIKey.isEmpty
+
+    // Keep the transcribing indicator visible while we wait on the network call so
+    // the user isn't left staring at a dismissed overlay during the round-trip.
+    if shouldTune {
+      state.isTranscribing = true
+    }
+
+    return .run { [tuning] send in
+      var finalResult = modifiedResult
+      if shouldTune {
+        do {
+          let tuned = try await tuning.tune(modifiedResult, tuningAPIKey)
+          if !tuned.isEmpty {
+            finalResult = tuned
+          }
+        } catch {
+          // Tuning is best-effort: fall back to the untuned transcript on any failure.
+          transcriptionFeatureLogger.error("Tuning failed; using untuned transcript: \(error.localizedDescription)")
+        }
+      }
+
       do {
         try await finalizeRecordingAndStoreTranscript(
-          result: modifiedResult,
+          result: finalResult,
           duration: duration,
           sourceAppBundleID: sourceAppBundleID,
           sourceAppName: sourceAppName,
           audioURL: audioURL,
           transcriptionHistory: transcriptionHistory
         )
+        await send(.finalizeCompleted)
       } catch {
         await send(.transcriptionError(error, audioURL))
       }

@@ -104,6 +104,10 @@ struct SettingsFeature {
     // Modifier configuration
     case setModifierSide(Modifier.Kind, Modifier.Side)
 
+    // Tuning
+    case setTuningEnabled(Bool)
+    case setTuningGroqAPIKey(String)
+
     // Word remappings
     case setWordRemovalsEnabled(Bool)
     case addWordRemoval
@@ -562,6 +566,14 @@ struct SettingsFeature {
 
       case let .setWordRemovalsEnabled(enabled):
         state.$hexSettings.withLock { $0.wordRemovalsEnabled = enabled }
+        return .none
+
+      case let .setTuningEnabled(enabled):
+        state.$hexSettings.withLock { $0.tuningEnabled = enabled }
+        return .none
+
+      case let .setTuningGroqAPIKey(key):
+        state.$hexSettings.withLock { $0.tuningGroqAPIKey = key }
         return .none
 
       }
