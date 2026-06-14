@@ -473,9 +473,13 @@ private extension TranscriptionFeature {
     let sourceAppName = state.sourceAppName
     let transcriptionHistory = state.$transcriptionHistory
 
-    // Optional Groq-powered tuning of the final transcript.
-    let tuningAPIKey = state.hexSettings.tuningGroqAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Optional Gemini-powered tuning of the final transcript.
+    let tuningAPIKey = state.hexSettings.tuningGeminiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
     let shouldTune = state.hexSettings.tuningEnabled && !tuningAPIKey.isEmpty
+    // Dictionary replacements run deterministically regardless of LLM tuning. When tuning
+    // is on, the same entries are also handed to the model so it doesn't fight the final pass.
+    let dictionaryEnabled = state.hexSettings.tuningDictionaryEnabled
+    let dictionary = dictionaryEnabled ? state.hexSettings.tuningDictionary : []
 
     // Keep the transcribing indicator visible while we wait on the network call so
     // the user isn't left staring at a dismissed overlay during the round-trip.
@@ -487,13 +491,23 @@ private extension TranscriptionFeature {
       var finalResult = modifiedResult
       if shouldTune {
         do {
-          let tuned = try await tuning.tune(modifiedResult, tuningAPIKey)
+          let tuned = try await tuning.tune(modifiedResult, tuningAPIKey, dictionary)
           if !tuned.isEmpty {
             finalResult = tuned
           }
         } catch {
           // Tuning is best-effort: fall back to the untuned transcript on any failure.
           transcriptionFeatureLogger.error("Tuning failed; using untuned transcript: \(error.localizedDescription)")
+        }
+      }
+
+      // Guaranteed deterministic dictionary pass: applied after tuning so the model can't
+      // undo it, and applied even when LLM tuning is off or the request failed.
+      if !dictionary.isEmpty {
+        let replaced = TuningDictionaryApplier.apply(finalResult, entries: dictionary)
+        if replaced != finalResult {
+          transcriptionFeatureLogger.info("Applied tuning dictionary replacement(s)")
+          finalResult = replaced
         }
       }
 

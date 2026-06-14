@@ -6,8 +6,32 @@ import SwiftUI
 struct TuningSectionView: View {
 	@ObserveInjection var inject
 	@Bindable var store: StoreOf<SettingsFeature>
+	@FocusState private var apiKeyFieldFocused: Bool
 
 	private var isEnabled: Bool { store.hexSettings.tuningEnabled }
+	private var isDictionaryEnabled: Bool { store.hexSettings.tuningDictionaryEnabled }
+
+	@ViewBuilder
+	private var keyTestStatusBadge: some View {
+		switch store.tuningKeyTestStatus {
+		case .idle:
+			EmptyView()
+		case .testing:
+			HStack(spacing: 4) {
+				ProgressView().controlSize(.small)
+				Text("Testing…").foregroundStyle(.secondary)
+			}
+			.font(.caption)
+		case .passed:
+			Label("Tested", systemImage: "checkmark.circle.fill")
+				.font(.caption)
+				.foregroundStyle(.green)
+		case .failed:
+			Label("Test Failed", systemImage: "xmark.circle.fill")
+				.font(.caption)
+				.foregroundStyle(.red)
+		}
+	}
 
 	var body: some View {
 		Section {
@@ -19,7 +43,7 @@ struct TuningSectionView: View {
 						set: { store.send(.setTuningEnabled($0)) }
 					)
 				)
-				Text("Polish each transcript with an LLM: remove false starts and filler, resolve spoken self-corrections (\u{201C}make it black, no, white\u{201D}), and format spoken lists (\u{201C}number one, number two\u{201D}) into 1. / 2. — without changing what you meant.")
+				Text("Polish each transcript with an LLM without changing your words: remove false starts and filler, resolve spoken self-corrections (\u{201C}make it black, no, white\u{201D}), and format spoken lists (\u{201C}number one, number two\u{201D}) into 1. / 2.")
 			} icon: {
 				Image(systemName: "wand.and.stars")
 			}
@@ -28,21 +52,34 @@ struct TuningSectionView: View {
 				Label {
 					VStack(alignment: .leading, spacing: 6) {
 						HStack {
-							Text("Groq API Key")
+							Text("Gemini API Key")
 							Spacer()
+							keyTestStatusBadge
 							SecureField(
-								"gsk_…",
+								"AIza…",
 								text: Binding(
-									get: { store.hexSettings.tuningGroqAPIKey },
-									set: { store.send(.setTuningGroqAPIKey($0)) }
+									get: { store.hexSettings.tuningGeminiAPIKey },
+									set: { store.send(.setTuningGeminiAPIKey($0)) }
 								)
 							)
 							.textFieldStyle(.roundedBorder)
 							.frame(maxWidth: 240)
+							.focused($apiKeyFieldFocused)
+							.onSubmit {
+								apiKeyFieldFocused = false
+								store.send(.testTuningGeminiAPIKey)
+							}
+							.onExitCommand {
+								apiKeyFieldFocused = false
+							}
+							.onKeyPress(.escape) {
+								apiKeyFieldFocused = false
+								return .handled
+							}
 						}
 						HStack(spacing: 4) {
 							Text("Stored locally on this Mac. Get a key at")
-							Link("console.groq.com/keys", destination: URL(string: "https://console.groq.com/keys")!)
+							Link("aistudio.google.com/apikey", destination: URL(string: "https://aistudio.google.com/apikey")!)
 						}
 						.font(.caption)
 						.foregroundStyle(.secondary)
@@ -55,13 +92,15 @@ struct TuningSectionView: View {
 					HStack {
 						Text("Model")
 						Spacer()
-						Text("qwen/qwen3-32b")
+						Text(TuningClientLive.model)
 							.foregroundStyle(.secondary)
 					}
 				} icon: {
 					Image(systemName: "cpu")
 				}
 			}
+
+			dictionarySection
 		} header: {
 			Text("Tuning")
 		} footer: {
@@ -71,5 +110,75 @@ struct TuningSectionView: View {
 			}
 		}
 		.enableInjection()
+	}
+
+	@ViewBuilder
+	private var dictionarySection: some View {
+		Label {
+			VStack(alignment: .leading, spacing: 6) {
+				Toggle(
+					"Dictionary",
+					isOn: Binding(
+						get: { store.hexSettings.tuningDictionaryEnabled },
+						set: { store.send(.setTuningDictionaryEnabled($0)) }
+					)
+				)
+				Text("Replace spoken phrases with exact text. Say \u{201C}GitHub URL\u{201D} \u{2192} https://github.com. Matches are exact and applied as a final pass, so the output is guaranteed.")
+					.font(.caption)
+					.foregroundStyle(.secondary)
+			}
+		} icon: {
+			Image(systemName: "character.book.closed")
+		}
+
+		if isDictionaryEnabled {
+			ForEach(store.hexSettings.tuningDictionary) { entry in
+				HStack(spacing: 8) {
+					Toggle(
+						"",
+						isOn: Binding(
+							get: { entry.isEnabled },
+							set: { var e = entry; e.isEnabled = $0; store.send(.updateTuningDictionaryEntry(e)) }
+						)
+					)
+					.labelsHidden()
+
+					TextField(
+						"Spoken phrase",
+						text: Binding(
+							get: { entry.phrase },
+							set: { var e = entry; e.phrase = $0; store.send(.updateTuningDictionaryEntry(e)) }
+						)
+					)
+					.textFieldStyle(.roundedBorder)
+
+					Image(systemName: "arrow.right")
+						.foregroundStyle(.secondary)
+						.font(.caption)
+
+					TextField(
+						"Replacement",
+						text: Binding(
+							get: { entry.replacement },
+							set: { var e = entry; e.replacement = $0; store.send(.updateTuningDictionaryEntry(e)) }
+						)
+					)
+					.textFieldStyle(.roundedBorder)
+
+					Button(role: .destructive) {
+						store.send(.removeTuningDictionaryEntry(entry.id))
+					} label: {
+						Image(systemName: "trash")
+					}
+					.buttonStyle(.borderless)
+				}
+			}
+
+			Button {
+				store.send(.addTuningDictionaryEntry)
+			} label: {
+				Label("Add Entry", systemImage: "plus")
+			}
+		}
 	}
 }

@@ -59,6 +59,19 @@ struct SettingsFeature {
     var modelDownload = ModelDownloadFeature.State()
     var shouldFlashModelSection = false
 
+    // Tuning key validation
+    var tuningKeyTestStatus: TuningKeyTestStatus = .idle
+  }
+
+  private enum CancelID {
+    case tuningKeyTest
+  }
+
+  enum TuningKeyTestStatus: Equatable {
+    case idle
+    case testing
+    case passed
+    case failed
   }
 
   enum Action: BindableAction {
@@ -106,7 +119,15 @@ struct SettingsFeature {
 
     // Tuning
     case setTuningEnabled(Bool)
-    case setTuningGroqAPIKey(String)
+    case setTuningGeminiAPIKey(String)
+    case testTuningGeminiAPIKey
+    case tuningKeyTestCompleted(success: Bool)
+
+    // Tuning dictionary
+    case setTuningDictionaryEnabled(Bool)
+    case addTuningDictionaryEntry
+    case updateTuningDictionaryEntry(TuningDictionaryEntry)
+    case removeTuningDictionaryEntry(UUID)
 
     // Word remappings
     case setWordRemovalsEnabled(Bool)
@@ -124,6 +145,7 @@ struct SettingsFeature {
   @Dependency(\.recording) var recording
   @Dependency(\.soundEffects) var soundEffects
   @Dependency(\.transcriptPersistence) var transcriptPersistence
+  @Dependency(\.tuning) var tuning
 
   private func deleteAudioEffect(for transcripts: [Transcript]) -> Effect<Action> {
     .run { [transcriptPersistence] _ in
@@ -572,8 +594,62 @@ struct SettingsFeature {
         state.$hexSettings.withLock { $0.tuningEnabled = enabled }
         return .none
 
-      case let .setTuningGroqAPIKey(key):
-        state.$hexSettings.withLock { $0.tuningGroqAPIKey = key }
+      case let .setTuningGeminiAPIKey(key):
+        state.$hexSettings.withLock { $0.tuningGeminiAPIKey = key }
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+          state.tuningKeyTestStatus = .idle
+          return .cancel(id: CancelID.tuningKeyTest)
+        }
+        // Debounce so we only test once the user stops typing/pasting.
+        return .run { send in
+          try await Task.sleep(for: .milliseconds(600))
+          await send(.testTuningGeminiAPIKey)
+        }
+        .cancellable(id: CancelID.tuningKeyTest, cancelInFlight: true)
+
+      case .testTuningGeminiAPIKey:
+        let key = state.hexSettings.tuningGeminiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+          state.tuningKeyTestStatus = .idle
+          return .none
+        }
+        state.tuningKeyTestStatus = .testing
+        return .run { send in
+          do {
+            try await tuning.validateKey(key)
+            await send(.tuningKeyTestCompleted(success: true))
+          } catch {
+            await send(.tuningKeyTestCompleted(success: false))
+          }
+        }
+        .cancellable(id: CancelID.tuningKeyTest, cancelInFlight: true)
+
+      case let .tuningKeyTestCompleted(success):
+        state.tuningKeyTestStatus = success ? .passed : .failed
+        return .none
+
+      case let .setTuningDictionaryEnabled(enabled):
+        state.$hexSettings.withLock { $0.tuningDictionaryEnabled = enabled }
+        return .none
+
+      case .addTuningDictionaryEntry:
+        state.$hexSettings.withLock {
+          $0.tuningDictionary.append(.init(phrase: "", replacement: ""))
+        }
+        return .none
+
+      case let .updateTuningDictionaryEntry(entry):
+        state.$hexSettings.withLock {
+          guard let index = $0.tuningDictionary.firstIndex(where: { $0.id == entry.id }) else { return }
+          $0.tuningDictionary[index] = entry
+        }
+        return .none
+
+      case let .removeTuningDictionaryEntry(id):
+        state.$hexSettings.withLock {
+          $0.tuningDictionary.removeAll { $0.id == id }
+        }
         return .none
 
       }

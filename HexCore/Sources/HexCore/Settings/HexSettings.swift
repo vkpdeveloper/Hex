@@ -48,7 +48,9 @@ public struct HexSettings: Codable, Equatable, Sendable {
 	public var wordRemovals: [WordRemoval]
 	public var wordRemappings: [WordRemapping]
 	public var tuningEnabled: Bool
-	public var tuningGroqAPIKey: String
+	public var tuningGeminiAPIKey: String
+	public var tuningDictionaryEnabled: Bool
+	public var tuningDictionary: [TuningDictionaryEntry]
 
 	private mutating func normalizeDoubleTapSettings() {
 		if !doubleTapLockEnabled {
@@ -82,7 +84,9 @@ public struct HexSettings: Codable, Equatable, Sendable {
 		wordRemovals: [WordRemoval] = HexSettings.defaultWordRemovals,
 		wordRemappings: [WordRemapping] = [],
 		tuningEnabled: Bool = false,
-		tuningGroqAPIKey: String = ""
+		tuningGeminiAPIKey: String = "",
+		tuningDictionaryEnabled: Bool = false,
+		tuningDictionary: [TuningDictionaryEntry] = []
 	) {
 		self.soundEffectsEnabled = soundEffectsEnabled
 		self.soundEffectsVolume = soundEffectsVolume
@@ -109,7 +113,9 @@ public struct HexSettings: Codable, Equatable, Sendable {
 		self.wordRemovals = wordRemovals
 		self.wordRemappings = wordRemappings
 		self.tuningEnabled = tuningEnabled
-		self.tuningGroqAPIKey = tuningGroqAPIKey
+		self.tuningGeminiAPIKey = tuningGeminiAPIKey
+		self.tuningDictionaryEnabled = tuningDictionaryEnabled
+		self.tuningDictionary = tuningDictionary
 		normalizeDoubleTapSettings()
 	}
 
@@ -159,7 +165,9 @@ private enum HexSettingKey: String, CodingKey, CaseIterable {
 	case wordRemovals
 	case wordRemappings
 	case tuningEnabled
-	case tuningGroqAPIKey
+	case tuningGeminiAPIKey
+	case tuningDictionaryEnabled
+	case tuningDictionary
 }
 
 private struct SettingsField<Value: Codable & Sendable> {
@@ -294,6 +302,8 @@ private enum HexSettingsSchema {
 			default: defaults.wordRemappings
 		).eraseToAny(),
 		SettingsField(.tuningEnabled, keyPath: \.tuningEnabled, default: defaults.tuningEnabled).eraseToAny(),
-		SettingsField(.tuningGroqAPIKey, keyPath: \.tuningGroqAPIKey, default: defaults.tuningGroqAPIKey).eraseToAny()
+		SettingsField(.tuningGeminiAPIKey, keyPath: \.tuningGeminiAPIKey, default: defaults.tuningGeminiAPIKey).eraseToAny(),
+		SettingsField(.tuningDictionaryEnabled, keyPath: \.tuningDictionaryEnabled, default: defaults.tuningDictionaryEnabled).eraseToAny(),
+		SettingsField(.tuningDictionary, keyPath: \.tuningDictionary, default: defaults.tuningDictionary).eraseToAny()
 	]
 }
