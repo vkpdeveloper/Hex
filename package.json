@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "release": "cd tools && bun run build",
+    "release": "rm -rf build dist && xcodebuild -scheme Hex -configuration Release -destination 'platform=macOS' -derivedDataPath build -skipMacroValidation CODE_SIGNING_ALLOWED=NO clean build && mkdir -p dist && cp -R build/Build/Products/Release/Hex.app dist/Hex.app && echo \"Built release app at dist/Hex.app\"",
     "changeset": "changeset",
     "changeset:add": "changeset",
     "changeset:add-ai": "bun run tools/scripts/add-changeset.ts",

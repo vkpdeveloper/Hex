@@ -1,4 +1,5 @@
 build/
+dist/
 updates/
 .vscode
 .DS_Store

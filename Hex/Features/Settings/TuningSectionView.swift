@@ -9,7 +9,6 @@ struct TuningSectionView: View {
 	@FocusState private var apiKeyFieldFocused: Bool
 
 	private var isEnabled: Bool { store.hexSettings.tuningEnabled }
-	private var isDictionaryEnabled: Bool { store.hexSettings.tuningDictionaryEnabled }
 
 	@ViewBuilder
 	private var keyTestStatusBadge: some View {
@@ -37,7 +36,7 @@ struct TuningSectionView: View {
 		Section {
 			Label {
 				Toggle(
-					"Enable Tuning",
+					"Enable Auto-edit",
 					isOn: Binding(
 						get: { store.hexSettings.tuningEnabled },
 						set: { store.send(.setTuningEnabled($0)) }
@@ -98,87 +97,28 @@ struct TuningSectionView: View {
 				} icon: {
 					Image(systemName: "cpu")
 				}
-			}
 
-			dictionarySection
+				Label {
+					HStack(spacing: 4) {
+						Text("Phrase replacements live in the")
+						Text("Dictionary")
+							.fontWeight(.semibold)
+						Text("tab.")
+					}
+					.font(.caption)
+					.foregroundStyle(.secondary)
+				} icon: {
+					Image(systemName: "character.book.closed")
+				}
+			}
 		} header: {
-			Text("Tuning")
+			Text("Auto-edit")
 		} footer: {
 			if isEnabled {
-				Text("Tuning runs after transcription and adds a short network round-trip before text is inserted. If the request fails, your original transcript is used.")
+				Text("Auto-edit runs after transcription and adds a short network round-trip before text is inserted. If the request fails, your original transcript is used.")
 					.settingsCaption()
 			}
 		}
 		.enableInjection()
-	}
-
-	@ViewBuilder
-	private var dictionarySection: some View {
-		Label {
-			VStack(alignment: .leading, spacing: 6) {
-				Toggle(
-					"Dictionary",
-					isOn: Binding(
-						get: { store.hexSettings.tuningDictionaryEnabled },
-						set: { store.send(.setTuningDictionaryEnabled($0)) }
-					)
-				)
-				Text("Replace spoken phrases with exact text. Say \u{201C}GitHub URL\u{201D} \u{2192} https://github.com. Matches are exact and applied as a final pass, so the output is guaranteed.")
-					.font(.caption)
-					.foregroundStyle(.secondary)
-			}
-		} icon: {
-			Image(systemName: "character.book.closed")
-		}
-
-		if isDictionaryEnabled {
-			ForEach(store.hexSettings.tuningDictionary) { entry in
-				HStack(spacing: 8) {
-					Toggle(
-						"",
-						isOn: Binding(
-							get: { entry.isEnabled },
-							set: { var e = entry; e.isEnabled = $0; store.send(.updateTuningDictionaryEntry(e)) }
-						)
-					)
-					.labelsHidden()
-
-					TextField(
-						"Spoken phrase",
-						text: Binding(
-							get: { entry.phrase },
-							set: { var e = entry; e.phrase = $0; store.send(.updateTuningDictionaryEntry(e)) }
-						)
-					)
-					.textFieldStyle(.roundedBorder)
-
-					Image(systemName: "arrow.right")
-						.foregroundStyle(.secondary)
-						.font(.caption)
-
-					TextField(
-						"Replacement",
-						text: Binding(
-							get: { entry.replacement },
-							set: { var e = entry; e.replacement = $0; store.send(.updateTuningDictionaryEntry(e)) }
-						)
-					)
-					.textFieldStyle(.roundedBorder)
-
-					Button(role: .destructive) {
-						store.send(.removeTuningDictionaryEntry(entry.id))
-					} label: {
-						Image(systemName: "trash")
-					}
-					.buttonStyle(.borderless)
-				}
-			}
-
-			Button {
-				store.send(.addTuningDictionaryEntry)
-			} label: {
-				Label("Add Entry", systemImage: "plus")
-			}
-		}
 	}
 }

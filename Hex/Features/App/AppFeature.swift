@@ -16,6 +16,7 @@ struct AppFeature {
   enum ActiveTab: Equatable {
     case settings
     case remappings
+    case dictionary
     case history
     case about
   }
@@ -276,6 +277,14 @@ struct AppView: View {
         .tag(AppFeature.ActiveTab.remappings)
 
         Button {
+          store.send(.setActiveTab(.dictionary))
+        } label: {
+          Label("Dictionary", systemImage: "character.book.closed")
+        }
+        .buttonStyle(.plain)
+        .tag(AppFeature.ActiveTab.dictionary)
+
+        Button {
           store.send(.setActiveTab(.history))
         } label: {
           Label("History", systemImage: "clock")
@@ -304,6 +313,9 @@ struct AppView: View {
       case .remappings:
         WordRemappingsView(store: store.scope(state: \.settings, action: \.settings))
           .navigationTitle("Transforms")
+      case .dictionary:
+        DictionaryView(store: store.scope(state: \.settings, action: \.settings))
+          .navigationTitle("Dictionary")
       case .history:
         HistoryView(store: store.scope(state: \.history, action: \.history))
           .navigationTitle("History")
