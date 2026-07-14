@@ -42,7 +42,7 @@ struct TuningSectionView: View {
 						set: { store.send(.setTuningEnabled($0)) }
 					)
 				)
-				Text("Polish each transcript with an LLM without changing your words: remove false starts and filler, resolve spoken self-corrections (\u{201C}make it black, no, white\u{201D}), and format spoken lists (\u{201C}number one, number two\u{201D}) into 1. / 2.")
+				Text("Edit each transcript into what you would have typed, without changing your words: remove filler and false starts, resolve self-corrections (\u{201C}coffee at 2, actually 3\u{201D} \u{2192} \u{201C}coffee at 3\u{201D}), infer punctuation, and format spoken lists.")
 			} icon: {
 				Image(systemName: "wand.and.stars")
 			}
@@ -51,14 +51,14 @@ struct TuningSectionView: View {
 				Label {
 					VStack(alignment: .leading, spacing: 6) {
 						HStack {
-							Text("Gemini API Key")
+							Text("Groq API Key")
 							Spacer()
 							keyTestStatusBadge
 							SecureField(
-								"AIza…",
+								"gsk_…",
 								text: Binding(
-									get: { store.hexSettings.tuningGeminiAPIKey },
-									set: { store.send(.setTuningGeminiAPIKey($0)) }
+									get: { store.hexSettings.tuningGroqAPIKey },
+									set: { store.send(.setTuningGroqAPIKey($0)) }
 								)
 							)
 							.textFieldStyle(.roundedBorder)
@@ -66,7 +66,7 @@ struct TuningSectionView: View {
 							.focused($apiKeyFieldFocused)
 							.onSubmit {
 								apiKeyFieldFocused = false
-								store.send(.testTuningGeminiAPIKey)
+								store.send(.testTuningGroqAPIKey)
 							}
 							.onExitCommand {
 								apiKeyFieldFocused = false
@@ -78,7 +78,7 @@ struct TuningSectionView: View {
 						}
 						HStack(spacing: 4) {
 							Text("Stored locally on this Mac. Get a key at")
-							Link("aistudio.google.com/apikey", destination: URL(string: "https://aistudio.google.com/apikey")!)
+							Link("console.groq.com/keys", destination: URL(string: "https://console.groq.com/keys")!)
 						}
 						.font(.caption)
 						.foregroundStyle(.secondary)

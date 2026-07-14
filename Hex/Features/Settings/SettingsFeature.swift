@@ -117,10 +117,10 @@ struct SettingsFeature {
     // Modifier configuration
     case setModifierSide(Modifier.Kind, Modifier.Side)
 
-    // Tuning
+    // Tuning (Auto-edit)
     case setTuningEnabled(Bool)
-    case setTuningGeminiAPIKey(String)
-    case testTuningGeminiAPIKey
+    case setTuningGroqAPIKey(String)
+    case testTuningGroqAPIKey
     case tuningKeyTestCompleted(success: Bool)
 
     // Tuning dictionary
@@ -594,8 +594,8 @@ struct SettingsFeature {
         state.$hexSettings.withLock { $0.tuningEnabled = enabled }
         return .none
 
-      case let .setTuningGeminiAPIKey(key):
-        state.$hexSettings.withLock { $0.tuningGeminiAPIKey = key }
+      case let .setTuningGroqAPIKey(key):
+        state.$hexSettings.withLock { $0.tuningGroqAPIKey = key }
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
           state.tuningKeyTestStatus = .idle
@@ -604,12 +604,12 @@ struct SettingsFeature {
         // Debounce so we only test once the user stops typing/pasting.
         return .run { send in
           try await Task.sleep(for: .milliseconds(600))
-          await send(.testTuningGeminiAPIKey)
+          await send(.testTuningGroqAPIKey)
         }
         .cancellable(id: CancelID.tuningKeyTest, cancelInFlight: true)
 
-      case .testTuningGeminiAPIKey:
-        let key = state.hexSettings.tuningGeminiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+      case .testTuningGroqAPIKey:
+        let key = state.hexSettings.tuningGroqAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
           state.tuningKeyTestStatus = .idle
           return .none

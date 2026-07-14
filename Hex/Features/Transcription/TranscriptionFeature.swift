@@ -473,8 +473,8 @@ private extension TranscriptionFeature {
     let sourceAppName = state.sourceAppName
     let transcriptionHistory = state.$transcriptionHistory
 
-    // Optional Gemini-powered tuning of the final transcript.
-    let tuningAPIKey = state.hexSettings.tuningGeminiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    // Optional Groq-powered Auto-edit of the final transcript.
+    let tuningAPIKey = state.hexSettings.tuningGroqAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
     let shouldTune = state.hexSettings.tuningEnabled && !tuningAPIKey.isEmpty
     // Dictionary replacements run deterministically regardless of LLM tuning. When tuning
     // is on, the same entries are also handed to the model so it doesn't fight the final pass.
