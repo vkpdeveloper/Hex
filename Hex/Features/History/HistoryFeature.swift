@@ -95,9 +95,13 @@ struct HistoryFeature {
 	@ObservableState
 	struct State: Equatable {
 		@Shared(.transcriptionHistory) var transcriptionHistory: TranscriptionHistory
+		@Shared(.hexSettings) var hexSettings: HexSettings
 		var playingTranscriptID: UUID?
 		var playbackID: UUID?
 		var audioPlayerController: AudioPlayerController?
+		/// Number of dictionary entries learned from the most recent transcript edit,
+		/// keyed by transcript so the row can show transient "Learned N" feedback.
+		var lastLearnedCount: [UUID: Int] = [:]
 
 		mutating func stopAudioPlayback() {
 			audioPlayerController?.stop()
@@ -116,6 +120,8 @@ struct HistoryFeature {
 		case confirmDeleteAll
 		case playbackFinished(UUID)
 		case navigateToSettings
+		case saveTranscriptEdit(id: UUID, newText: String)
+		case clearLearnedBadge(UUID)
 	}
 
 	@Dependency(\.pasteboard) var pasteboard
@@ -212,6 +218,45 @@ struct HistoryFeature {
 			case .navigateToSettings:
 				// This will be handled by the parent reducer
 				return .none
+
+			case let .saveTranscriptEdit(id, newText):
+				guard let index = state.transcriptionHistory.history.firstIndex(where: { $0.id == id }) else {
+					return .none
+				}
+				let original = state.transcriptionHistory.history[index].text
+				let edited = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+				guard !edited.isEmpty, edited != original else { return .none }
+
+				state.$transcriptionHistory.withLock { history in
+					history.history[index].text = edited
+				}
+
+				// Learn-from-corrections: word substitutions in the user's edit become
+				// dictionary entries so future transcripts get them automatically.
+				guard state.hexSettings.learnFromCorrectionsEnabled else { return .none }
+				let learned = CorrectionLearner.learnEntries(
+					original: original,
+					edited: edited,
+					existing: state.hexSettings.tuningDictionary
+				)
+				guard !learned.isEmpty else { return .none }
+
+				state.$hexSettings.withLock { settings in
+					settings.tuningDictionary.append(contentsOf: learned)
+					// The dictionary only applies when enabled; learning implies intent.
+					settings.tuningDictionaryEnabled = true
+				}
+				state.lastLearnedCount[id] = learned.count
+				historyLogger.info("Learned \(learned.count) dictionary entrie(s) from transcript edit")
+
+				return .run { send in
+					try await Task.sleep(for: .seconds(3))
+					await send(.clearLearnedBadge(id))
+				}
+
+			case let .clearLearnedBadge(id):
+				state.lastLearnedCount[id] = nil
+				return .none
 			}
 		}
 	}
@@ -220,18 +265,49 @@ struct HistoryFeature {
 struct TranscriptView: View {
 	let transcript: Transcript
 	let isPlaying: Bool
+	let learnedCount: Int?
 	let onPlay: () -> Void
 	let onCopy: () -> Void
 	let onDelete: () -> Void
+	let onSaveEdit: (String) -> Void
+
+	@State private var isEditing = false
+	@State private var editedText = ""
+	@FocusState private var editorFocused: Bool
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 0) {
-			Text(transcript.text)
-				.font(.body)
-				.lineLimit(nil)
-				.fixedSize(horizontal: false, vertical: true)
-				.padding(.trailing, 40) // Space for buttons
-				.padding(12)
+			if isEditing {
+				TextEditor(text: $editedText)
+					.font(.body)
+					.scrollContentBackground(.hidden)
+					.frame(minHeight: 60)
+					.padding(8)
+					.focused($editorFocused)
+					.onKeyPress(.escape) {
+						cancelEditing()
+						return .handled
+					}
+				HStack(spacing: 8) {
+					Spacer()
+					Button("Cancel") { cancelEditing() }
+						.buttonStyle(.plain)
+						.foregroundStyle(.secondary)
+					Button("Save") { commitEditing() }
+						.buttonStyle(.borderedProminent)
+						.controlSize(.small)
+						.disabled(editedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+				}
+				.padding(.horizontal, 12)
+				.padding(.bottom, 8)
+			} else {
+				Text(transcript.text)
+					.font(.body)
+					.lineLimit(nil)
+					.fixedSize(horizontal: false, vertical: true)
+					.padding(.trailing, 40) // Space for buttons
+					.padding(12)
+			}
 
 			Divider()
 
@@ -262,6 +338,23 @@ struct TranscriptView: View {
 				Spacer()
 
 				HStack(spacing: 10) {
+					if let learnedCount {
+						Label("Learned \(learnedCount)", systemImage: "character.book.closed.fill")
+							.font(.caption)
+							.foregroundStyle(.green)
+							.help("Added \(learnedCount) correction(s) to the Dictionary")
+							.transition(.opacity)
+					}
+
+					Button {
+						startEditing()
+					} label: {
+						Image(systemName: "pencil")
+					}
+					.buttonStyle(.plain)
+					.foregroundStyle(isEditing ? .blue : .secondary)
+					.help("Edit transcript (corrections teach the Dictionary)")
+
 					Button {
 						onCopy()
 						showCopyAnimation()
@@ -314,6 +407,25 @@ struct TranscriptView: View {
 	@State private var showCopied = false
 	@State private var copyTask: Task<Void, Error>?
 
+	private func startEditing() {
+		editedText = transcript.text
+		isEditing = true
+		editorFocused = true
+	}
+
+	private func cancelEditing() {
+		isEditing = false
+		editedText = ""
+	}
+
+	private func commitEditing() {
+		let text = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
+		isEditing = false
+		editedText = ""
+		guard !text.isEmpty, text != transcript.text else { return }
+		onSaveEdit(text)
+	}
+
 	private func showCopyAnimation() {
 		copyTask?.cancel()
 
@@ -335,9 +447,11 @@ struct TranscriptView: View {
 	TranscriptView(
 		transcript: Transcript(timestamp: Date(), text: "Hello, world!", audioPath: URL(fileURLWithPath: "/Users/langton/Downloads/test.m4a"), duration: 1.0),
 		isPlaying: false,
+		learnedCount: nil,
 		onPlay: {},
 		onCopy: {},
-		onDelete: {}
+		onDelete: {},
+		onSaveEdit: { _ in }
 	)
 }
 
@@ -372,9 +486,11 @@ struct HistoryView: View {
                 TranscriptView(
                   transcript: transcript,
                   isPlaying: store.playingTranscriptID == transcript.id,
+                  learnedCount: store.lastLearnedCount[transcript.id],
                   onPlay: { store.send(.playTranscript(transcript.id)) },
                   onCopy: { store.send(.copyToClipboard(transcript.text)) },
-                  onDelete: { store.send(.deleteTranscript(transcript.id)) }
+                  onDelete: { store.send(.deleteTranscript(transcript.id)) },
+                  onSaveEdit: { store.send(.saveTranscriptEdit(id: transcript.id, newText: $0)) }
                 )
               }
             }

@@ -89,6 +89,20 @@ struct DictionaryView: View {
 				)
 				.toggleStyle(.checkbox)
 
+				VStack(alignment: .leading, spacing: 2) {
+					Toggle(
+						"Learn from corrections",
+						isOn: Binding(
+							get: { store.hexSettings.learnFromCorrectionsEnabled },
+							set: { store.send(.setLearnFromCorrectionsEnabled($0)) }
+						)
+					)
+					.toggleStyle(.checkbox)
+					Text("When you edit a transcript in History, word corrections (\u{201C}grock\u{201D} \u{2192} \u{201C}Groq\u{201D}) are added here automatically.")
+						.settingsCaption()
+						.padding(.leading, 20)
+				}
+
 				if store.hexSettings.tuningDictionary.isEmpty {
 					emptyState
 				} else {

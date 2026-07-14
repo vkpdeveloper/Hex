@@ -125,6 +125,7 @@ struct SettingsFeature {
 
     // Tuning dictionary
     case setTuningDictionaryEnabled(Bool)
+    case setLearnFromCorrectionsEnabled(Bool)
     case addTuningDictionaryEntry
     case updateTuningDictionaryEntry(TuningDictionaryEntry)
     case removeTuningDictionaryEntry(UUID)
@@ -631,6 +632,10 @@ struct SettingsFeature {
 
       case let .setTuningDictionaryEnabled(enabled):
         state.$hexSettings.withLock { $0.tuningDictionaryEnabled = enabled }
+        return .none
+
+      case let .setLearnFromCorrectionsEnabled(enabled):
+        state.$hexSettings.withLock { $0.learnFromCorrectionsEnabled = enabled }
         return .none
 
       case .addTuningDictionaryEntry:

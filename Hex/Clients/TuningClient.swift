@@ -81,8 +81,9 @@ struct TuningClientLive {
   private static let endpoint = URL(string: "https://api.groq.com/openai/v1/chat/completions")!
 
   /// Groq model used for Auto-edit. Do not change without explicit instruction.
-  /// `reasoning_format: "hidden"` keeps Qwen's internal thinking out of the output.
-  static let model = "qwen/qwen3-32b"
+  /// `reasoning_effort: "none"` disables Qwen's thinking mode entirely;
+  /// `reasoning_format: "hidden"` keeps any residual reasoning out of the output.
+  static let model = "qwen/qwen3.6-27b"
 
   /// Instruction set describing exactly how to clean up a spoken transcript.
   /// Modeled on Wispr Flow's Auto-edit: filler removal, backtrack (explicit cues and
@@ -176,6 +177,7 @@ struct TuningClientLive {
         .init(role: "user", content: text),
       ],
       temperature: 0.2,
+      reasoningEffort: "none",
       reasoningFormat: "hidden",
       stream: false
     )
@@ -257,11 +259,13 @@ private struct ChatCompletionRequest: Encodable {
   let model: String
   let messages: [Message]
   let temperature: Double
+  let reasoningEffort: String
   let reasoningFormat: String
   let stream: Bool
 
   enum CodingKeys: String, CodingKey {
     case model, messages, temperature, stream
+    case reasoningEffort = "reasoning_effort"
     case reasoningFormat = "reasoning_format"
   }
 }

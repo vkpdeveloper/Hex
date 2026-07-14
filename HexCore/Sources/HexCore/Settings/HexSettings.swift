@@ -51,6 +51,7 @@ public struct HexSettings: Codable, Equatable, Sendable {
 	public var tuningGroqAPIKey: String
 	public var tuningDictionaryEnabled: Bool
 	public var tuningDictionary: [TuningDictionaryEntry]
+	public var learnFromCorrectionsEnabled: Bool
 
 	private mutating func normalizeDoubleTapSettings() {
 		if !doubleTapLockEnabled {
@@ -86,7 +87,8 @@ public struct HexSettings: Codable, Equatable, Sendable {
 		tuningEnabled: Bool = false,
 		tuningGroqAPIKey: String = "",
 		tuningDictionaryEnabled: Bool = false,
-		tuningDictionary: [TuningDictionaryEntry] = []
+		tuningDictionary: [TuningDictionaryEntry] = [],
+		learnFromCorrectionsEnabled: Bool = true
 	) {
 		self.soundEffectsEnabled = soundEffectsEnabled
 		self.soundEffectsVolume = soundEffectsVolume
@@ -116,6 +118,7 @@ public struct HexSettings: Codable, Equatable, Sendable {
 		self.tuningGroqAPIKey = tuningGroqAPIKey
 		self.tuningDictionaryEnabled = tuningDictionaryEnabled
 		self.tuningDictionary = tuningDictionary
+		self.learnFromCorrectionsEnabled = learnFromCorrectionsEnabled
 		normalizeDoubleTapSettings()
 	}
 
@@ -168,6 +171,7 @@ private enum HexSettingKey: String, CodingKey, CaseIterable {
 	case tuningGroqAPIKey
 	case tuningDictionaryEnabled
 	case tuningDictionary
+	case learnFromCorrectionsEnabled
 }
 
 private struct SettingsField<Value: Codable & Sendable> {
@@ -304,6 +308,7 @@ private enum HexSettingsSchema {
 		SettingsField(.tuningEnabled, keyPath: \.tuningEnabled, default: defaults.tuningEnabled).eraseToAny(),
 		SettingsField(.tuningGroqAPIKey, keyPath: \.tuningGroqAPIKey, default: defaults.tuningGroqAPIKey).eraseToAny(),
 		SettingsField(.tuningDictionaryEnabled, keyPath: \.tuningDictionaryEnabled, default: defaults.tuningDictionaryEnabled).eraseToAny(),
-		SettingsField(.tuningDictionary, keyPath: \.tuningDictionary, default: defaults.tuningDictionary).eraseToAny()
+		SettingsField(.tuningDictionary, keyPath: \.tuningDictionary, default: defaults.tuningDictionary).eraseToAny(),
+		SettingsField(.learnFromCorrectionsEnabled, keyPath: \.learnFromCorrectionsEnabled, default: defaults.learnFromCorrectionsEnabled).eraseToAny()
 	]
 }
