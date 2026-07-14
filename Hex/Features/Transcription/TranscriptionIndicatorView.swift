@@ -1,17 +1,17 @@
 //
-//  HexCapsuleView.swift
+//  TranscriptionIndicatorView.swift
 //  Hex
 //
 //  Created by Kit Langton on 1/25/25.
+//  Redesigned as a Wispr Flow-style pill with a live waveform.
 
-import AppKit
 import Inject
 import Pow
 import SwiftUI
 
 struct TranscriptionIndicatorView: View {
   @ObserveInjection var inject
-  
+
   enum Status {
     case hidden
     case optionKeyPressed
@@ -23,150 +23,211 @@ struct TranscriptionIndicatorView: View {
   var status: Status
   var meter: Meter
 
-  let transcribeBaseColor: Color = .blue
-  private var backgroundColor: Color {
-    switch status {
-    case .hidden: return Color.clear
-    case .optionKeyPressed: return Color.black
-    case .recording:
-      return mixedColor(mixedNSColor(.red, with: .black, by: 0.5), with: .red, by: meter.averagePower * 3)
-    case .transcribing: return mixedColor(.blue, with: .black, by: 0.5)
-    case .prewarming: return mixedColor(.blue, with: .black, by: 0.5)
-    }
+  /// Optional interactive affordances. When `nil`, the buttons render as
+  /// purely decorative (see `InvisibleWindow` hit-testing for how clicks are
+  /// routed only over the pill).
+  var onCancel: (() -> Void)? = nil
+  var onConfirm: (() -> Void)? = nil
+  /// Reports the pill's on-screen frame so the host window can constrain mouse
+  /// events to the pill and keep the rest of the screen click-through.
+  var pillFrameHolder: PillFrameHolder? = nil
+
+  // MARK: - Layout constants
+
+  private let pillHeight: CGFloat = 28
+  private let buttonSize: CGFloat = 18
+
+  private var isExpanded: Bool {
+    status == .recording || status == .transcribing || status == .prewarming
   }
 
-  private var strokeColor: Color {
-    switch status {
-    case .hidden: return Color.clear
-    case .optionKeyPressed: return Color.black
-    case .recording: return mixedColor(.red, with: .white, by: 0.1).opacity(0.6)
-    case .transcribing: return mixedColor(.blue, with: .white, by: 0.1).opacity(0.6)
-    case .prewarming: return mixedColor(.blue, with: .white, by: 0.1).opacity(0.6)
-    }
+  private var isProcessing: Bool {
+    status == .transcribing || status == .prewarming
   }
 
-  private func mixedColor(_ color: NSColor, with otherColor: NSColor, by fraction: Double) -> Color {
-    Color(nsColor: mixedNSColor(color, with: otherColor, by: fraction))
-  }
-
-  private func mixedNSColor(_ color: NSColor, with otherColor: NSColor, by fraction: Double) -> NSColor {
-    let clampedFraction = min(max(fraction, 0), 1)
-    return color.blended(withFraction: clampedFraction, of: otherColor) ?? color
-  }
-
-  private var innerShadowColor: Color {
-    switch status {
-    case .hidden: return Color.clear
-    case .optionKeyPressed: return Color.clear
-    case .recording: return Color.red
-    case .transcribing: return transcribeBaseColor
-    case .prewarming: return transcribeBaseColor
-    }
-  }
-
-  private let cornerRadius: CGFloat = 8
-  private let baseWidth: CGFloat = 16
-  private let expandedWidth: CGFloat = 56
-
-  var isHidden: Bool {
-    status == .hidden
-  }
-
-  @State var transcribeEffect = 0
+  @State private var transcribeEffect = 0
 
   var body: some View {
-    let averagePower = min(1, meter.averagePower * 3)
-    let peakPower = min(1, meter.peakPower * 3)
     ZStack {
-      Capsule()
-        .fill(backgroundColor.shadow(.inner(color: innerShadowColor, radius: 4)))
-        .overlay {
+      Group {
+        if isExpanded {
+          expandedPill
+        } else {
+          // optionKeyPressed (and the shape `hidden` animates out from):
+          // a tiny dark lozenge.
           Capsule()
-            .stroke(strokeColor, lineWidth: 1)
-            .blendMode(.screen)
+            .fill(Color(white: 0.08).opacity(0.95))
+            .frame(width: 16, height: 6)
         }
-        .overlay(alignment: .center) {
-          RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(Color.red.opacity(status == .recording ? (averagePower < 0.1 ? averagePower / 0.1 : 1) : 0))
-            .blur(radius: 2)
-            .blendMode(.screen)
-            .padding(6)
-        }
-        .overlay(alignment: .center) {
-          RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(Color.white.opacity(status == .recording ? (averagePower < 0.1 ? averagePower / 0.1 : 0.5) : 0))
-            .blur(radius: 1)
-            .blendMode(.screen)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(7)
-        }
-        .overlay(alignment: .center) {
-          GeometryReader { proxy in
-            RoundedRectangle(cornerRadius: cornerRadius)
-              .fill(Color.red.opacity(status == .recording ? (peakPower < 0.1 ? (peakPower / 0.1) * 0.5 : 0.5) : 0))
-              .frame(width: max(proxy.size.width * (peakPower + 0.6), 0), height: proxy.size.height, alignment: .center)
-              .frame(maxWidth: .infinity, alignment: .center)
-              .blur(radius: 4)
-              .blendMode(.screen)
-          }.padding(6)
-        }
-        .cornerRadius(cornerRadius)
-        .shadow(
-          color: status == .recording ? .red.opacity(averagePower) : .red.opacity(0),
-          radius: 4
-        )
-        .shadow(
-          color: status == .recording ? .red.opacity(averagePower * 0.5) : .red.opacity(0),
-          radius: 8
-        )
-        .animation(.interactiveSpring(), value: meter)
-        .frame(
-          width: status == .recording ? expandedWidth : baseWidth,
-          height: baseWidth
-        )
-        .opacity(status == .hidden ? 0 : 1)
-        .scaleEffect(status == .hidden ? 0.0 : 1)
-        .blur(radius: status == .hidden ? 4 : 0)
-        .animation(.bouncy(duration: 0.3), value: status)
-        .changeEffect(.glow(color: .red.opacity(0.5), radius: 8), value: status)
-        .changeEffect(.shine(angle: .degrees(0), duration: 0.6), value: transcribeEffect)
-        .compositingGroup()
-        .task(id: status == .transcribing) {
-          while status == .transcribing, !Task.isCancelled {
-            transcribeEffect += 1
-            try? await Task.sleep(for: .seconds(0.25))
-          }
-        }
-      
+      }
+      .opacity(status == .hidden ? 0 : 1)
+      .scaleEffect(status == .hidden ? 0.5 : 1, anchor: .bottom)
+      .blur(radius: status == .hidden ? 6 : 0)
+      .animation(.spring(response: 0.35, dampingFraction: 0.75), value: status)
+
       // Show tooltip when prewarming
       if status == .prewarming {
-        VStack(spacing: 4) {
-          Text("Model prewarming...")
-            .font(.system(size: 12, weight: .medium))
-            .foregroundColor(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-              RoundedRectangle(cornerRadius: 4)
-                .fill(Color.black.opacity(0.8))
-            )
-        }
-        .offset(y: -24)
-        .transition(.opacity)
-        .zIndex(2)
+        Text("Model prewarming...")
+          .font(.system(size: 12, weight: .medium))
+          .foregroundColor(.white)
+          .padding(.horizontal, 8)
+          .padding(.vertical, 4)
+          .background(
+            RoundedRectangle(cornerRadius: 6)
+              .fill(Color.black.opacity(0.8))
+          )
+          .offset(y: -28)
+          .transition(.opacity)
+          .zIndex(2)
       }
     }
     .enableInjection()
   }
+
+  // MARK: - Pill
+
+  private var expandedPill: some View {
+    HStack(spacing: 8) {
+      circleButton(
+        systemName: "xmark",
+        foreground: .white,
+        background: Color(white: 0.25),
+        action: onCancel
+      )
+
+      WaveformView(meter: meter, mode: isProcessing ? .processing : .live)
+        .padding(.horizontal, 2)
+
+      circleButton(
+        systemName: "checkmark",
+        foreground: .black,
+        background: .white,
+        action: onConfirm
+      )
+    }
+    .padding(.horizontal, 6)
+    .frame(height: pillHeight)
+    .background(pillBackground)
+    .changeEffect(.shine(angle: .degrees(0), duration: 0.6), value: transcribeEffect)
+    .compositingGroup()
+    .background(frameReporter)
+    .task(id: status == .transcribing) {
+      while status == .transcribing, !Task.isCancelled {
+        transcribeEffect += 1
+        try? await Task.sleep(for: .seconds(0.25))
+      }
+    }
+  }
+
+  private var pillBackground: some View {
+    Capsule()
+      .fill(Color(white: 0.08).opacity(0.95))
+      .overlay(
+        Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1)
+      )
+      .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 2)
+  }
+
+  /// Publishes the pill's global frame to the host window so mouse events can
+  /// be constrained to the pill (keeps the rest of the screen click-through).
+  private var frameReporter: some View {
+    GeometryReader { proxy in
+      Color.clear
+        .onAppear { pillFrameHolder?.frame = proxy.frame(in: .global) }
+        .onChange(of: proxy.frame(in: .global)) { _, frame in
+          pillFrameHolder?.frame = frame
+        }
+        .onDisappear { pillFrameHolder?.frame = .zero }
+    }
+  }
+
+  private func circleButton(
+    systemName: String,
+    foreground: Color,
+    background: Color,
+    action: (() -> Void)?
+  ) -> some View {
+    Button {
+      action?()
+    } label: {
+      ZStack {
+        Circle().fill(background)
+        Image(systemName: systemName)
+          .font(.system(size: 9, weight: .bold))
+          .foregroundStyle(foreground)
+      }
+      .frame(width: buttonSize, height: buttonSize)
+    }
+    .buttonStyle(.plain)
+    .allowsHitTesting(action != nil)
+  }
+}
+
+// MARK: - Waveform
+
+/// A scrolling live waveform of vertical bars. In `.live` mode the bars react to
+/// the mic meter and scroll left; in `.processing` mode they animate a gentle
+/// left-to-right sweep. All state is UI-local — no reducer state is touched.
+private struct WaveformView: View {
+  enum Mode { case live, processing }
+
+  var meter: Meter
+  var mode: Mode
+
+  private let barCount = 14
+  private let minHeight: CGFloat = 3
+  private let maxHeight: CGFloat = 16
+
+  @State private var bars: [CGFloat] = Array(repeating: 3, count: 14)
+
+  var body: some View {
+    HStack(spacing: 2) {
+      ForEach(Array(bars.enumerated()), id: \.offset) { _, height in
+        Capsule()
+          .fill(Color.white.opacity(mode == .processing ? 0.8 : 0.95))
+          .frame(width: 2, height: height)
+      }
+    }
+    .frame(height: maxHeight)
+    .animation(.smooth(duration: 0.12), value: bars)
+    .onChange(of: meter) { _, newValue in
+      guard mode == .live else { return }
+      let level = min(1, max(newValue.averagePower * 3, newValue.peakPower * 3 * 0.6))
+      pushLive(CGFloat(level))
+    }
+    .task(id: mode) {
+      guard mode == .processing else { return }
+      var phase = 0.0
+      while !Task.isCancelled {
+        phase += 0.35
+        bars = (0 ..< barCount).map { index in
+          let s = sin(phase + Double(index) * 0.5)
+          return minHeight + CGFloat((s + 1) / 2) * (maxHeight - minHeight) * 0.7
+        }
+        try? await Task.sleep(for: .seconds(0.08))
+      }
+    }
+  }
+
+  private func pushLive(_ level: CGFloat) {
+    var next = bars
+    next.removeFirst()
+    // Tiny jitter floor so silence still shows faint bars.
+    let jitter = CGFloat.random(in: 0 ... 0.06)
+    let normalized = max(level, jitter)
+    next.append(minHeight + normalized * (maxHeight - minHeight))
+    bars = next
+  }
 }
 
 #Preview("HEX") {
-  VStack(spacing: 8) {
+  VStack(spacing: 16) {
     TranscriptionIndicatorView(status: .hidden, meter: .init(averagePower: 0, peakPower: 0))
     TranscriptionIndicatorView(status: .optionKeyPressed, meter: .init(averagePower: 0, peakPower: 0))
-    TranscriptionIndicatorView(status: .recording, meter: .init(averagePower: 0.5, peakPower: 0.5))
+    TranscriptionIndicatorView(status: .recording, meter: .init(averagePower: 0.4, peakPower: 0.6))
     TranscriptionIndicatorView(status: .transcribing, meter: .init(averagePower: 0, peakPower: 0))
     TranscriptionIndicatorView(status: .prewarming, meter: .init(averagePower: 0, peakPower: 0))
   }
   .padding(40)
+  .background(Color.gray.opacity(0.3))
 }

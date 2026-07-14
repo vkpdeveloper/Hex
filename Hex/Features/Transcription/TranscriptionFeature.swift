@@ -640,6 +640,10 @@ struct TranscriptionView: View {
   @Bindable var store: StoreOf<TranscriptionFeature>
   @ObserveInjection var inject
 
+  /// When provided, the pill reports its frame here so the host window can make
+  /// the ✕/✓ buttons clickable while keeping the rest of the screen click-through.
+  var pillFrameHolder: PillFrameHolder? = nil
+
   var status: TranscriptionIndicatorView.Status {
     if store.isTranscribing {
       return .transcribing
@@ -655,7 +659,10 @@ struct TranscriptionView: View {
   var body: some View {
     TranscriptionIndicatorView(
       status: status,
-      meter: store.meter
+      meter: store.meter,
+      onCancel: { store.send(.cancel) },
+      onConfirm: { store.send(.stopRecording) },
+      pillFrameHolder: pillFrameHolder
     )
     .task {
       await store.send(.task).finish()

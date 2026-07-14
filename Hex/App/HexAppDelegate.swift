@@ -7,6 +7,7 @@ private let cacheLogger = HexLog.caches
 
 class HexAppDelegate: NSObject, NSApplicationDelegate {
 	var invisibleWindow: InvisibleWindow?
+	var pillFrameHolder: PillFrameHolder?
 	var settingsWindow: NSWindow?
 	var statusItem: NSStatusItem!
 	private var launchedAtLogin = false
@@ -99,9 +100,13 @@ class HexAppDelegate: NSObject, NSApplicationDelegate {
 			return
 		}
 		let transcriptionStore = HexApp.appStore.scope(state: \.transcription, action: \.transcription)
-		let transcriptionView = TranscriptionView(store: transcriptionStore).padding().padding(.top).padding(.top)
-			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-		invisibleWindow = InvisibleWindow.fromView(transcriptionView)
+		let frameHolder = PillFrameHolder()
+		pillFrameHolder = frameHolder
+		// Wispr Flow-style: pin the pill to the bottom-center, above the Dock.
+		let transcriptionView = TranscriptionView(store: transcriptionStore, pillFrameHolder: frameHolder)
+			.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+			.padding(.bottom, 16)
+		invisibleWindow = InvisibleWindow.fromView(transcriptionView, frameHolder: frameHolder)
 		invisibleWindow?.orderFrontRegardless()
 	}
 
